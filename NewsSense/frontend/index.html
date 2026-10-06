@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NewsSense</title>
+<style>
+:root{--bg:#f6f4ef;--ink:#20242b;--mute:#6a707c;--brand:#b3261e;--soft:#f9e4e2;--line:#ddd8cc;--pos:#15803d;--neg:#b91c1c;--neu:#6a707c}
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 Georgia,'Times New Roman',serif;background:var(--bg);color:var(--ink)}h1,h2,h3,button,input,select,textarea,.ui{font-family:system-ui,sans-serif}
+header{display:flex;gap:6px;align-items:center;padding:12px 20px;background:#fff;border-bottom:3px solid var(--brand);flex-wrap:wrap}header b{font-size:22px;color:var(--brand);margin-right:auto;font-family:Georgia,serif}
+main{max-width:900px;margin:0 auto;padding:20px}.card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:14px}
+button{background:var(--brand);color:#fff;border:0;padding:8px 14px;border-radius:5px;font-size:14px;cursor:pointer}button.alt{background:var(--soft);color:var(--brand)}button.del{background:#eee;color:var(--neg)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid #f59e0b;outline-offset:2px}
+input,textarea{font:15px system-ui;padding:9px;border:1px solid var(--line);border-radius:5px;width:100%;margin:4px 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.stat b{display:block;font:700 26px system-ui}.ui{font-size:14px}
+.bar{height:10px;background:#eee;border-radius:5px;overflow:hidden;margin:2px 0 8px}.bar i{display:block;height:100%;background:var(--brand)}
+.tag{display:inline-block;background:var(--soft);color:var(--brand);padding:2px 10px;border-radius:99px;margin:2px;font:13px system-ui}.badge{font:12px system-ui;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:4px}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.neu{color:var(--neu)}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;border-bottom:1px solid var(--line);font:14px system-ui}
+.empty{color:var(--mute);text-align:center;padding:24px;font-family:system-ui}.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}.tabs button{background:#fff;color:var(--ink);border:1px solid var(--line)}.tabs button.on{background:var(--brand);color:#fff}
+.stk{display:flex;height:16px;border-radius:5px;overflow:hidden;margin:6px 0}.stk i{display:block}
+#toast{position:fixed;bottom:16px;right:16px;display:grid;gap:8px}#toast div{background:#20242b;color:#fff;padding:10px 14px;border-radius:5px;font:14px system-ui}#toast .e{background:var(--neg)}.auth{max-width:380px;margin:8vh auto}
+</style></head><body><div id="toast" role="status" aria-live="polite"></div><div id="root"></div>
+<script>
+const $=s=>document.querySelector(s),root=$('#root');let S={token:localStorage.ns_token,name:localStorage.ns_name,page:'analyze',cur:null,tab:'Summary'};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m,e){const d=document.createElement('div');d.textContent=m;if(e)d.className='e';$('#toast').append(d);setTimeout(()=>d.remove(),4500)}
+async function api(p,o={}){o.headers={...(o.headers||{}),Authorization:'Bearer '+S.token};if(o.json){o.headers['Content-Type']='application/json';o.body=JSON.stringify(o.json);delete o.json}
+ const r=await fetch('/api'+p,o);let d={};try{d=await r.json()}catch{}if(r.status==401&&S.token){localStorage.clear();S.token=null;render()}if(!r.ok)throw new Error(typeof d.detail=='string'?d.detail:'Something went wrong. Please try again.');return d}
+const cls=l=>l=='Positive'?'pos':l=='Negative'?'neg':'neu',bar=(l,v)=>`<div class="ui">${esc(l)} · <b>${v}%</b></div><div class="bar"><i style="width:${v}%"></i></div>`;
+function auth(reg){root.innerHTML=`<form class="card auth" id="f"><h1 style="color:var(--brand)">NewsSense</h1><p class="ui">Analyze news articles and broadcasts for topics, sentiment and summaries.</p>${reg?'<label class="ui">Name<input name="name" required></label>':''}<label class="ui">Email<input name="email" type="email" required></label><label class="ui">Password<input name="password" type="password" minlength="8" required></label><button>${reg?'Create account':'Log in'}</button><p class="ui"><a href="#" id="sw">${reg?'I already have an account':'Create an account'}</a></p></form>`;
+ $('#sw').onclick=e=>{e.preventDefault();auth(!reg)};$('#f').onsubmit=async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.target));try{
+  if(reg){await api('/auth/register',{method:'POST',json:b});toast('Account created. Log in to continue.');return auth(false)}
+  const d=await api('/auth/login',{method:'POST',json:b});localStorage.ns_token=S.token=d.token;localStorage.ns_name=S.name=d.name;render()}catch(x){toast(x.message,1)}}}
+async function render(){if(!S.token)return auth(false);
+ root.innerHTML=`<header><b>NewsSense</b><button class="${S.page=='analyze'&&!S.cur?'':'alt'}" id="n1">Analyze</button><button class="${S.page=='dash'?'':'alt'}" id="n2">Dashboard</button><button class="alt" id="lo">Log out</button></header><main id="m"></main>`;
+ $('#n1').onclick=()=>{S.page='analyze';S.cur=null;render()};$('#n2').onclick=()=>{S.page='dash';S.cur=null;render()};
+ $('#lo').onclick=async()=>{await api('/auth/logout',{method:'POST'}).catch(()=>{});localStorage.clear();S.token=null;render()};
+ const m=$('#m');S.cur?result(m):S.page=='dash'?dash(m):input(m)}
+function input(m){m.innerHTML=`<h2>Analyze a news story, ${esc(S.name)}</h2><form class="card" id="f"><label class="ui">Headline (optional)<input name="title"></label><label class="ui">Article text<textarea name="text" rows="10" placeholder="Paste a news article here…"></textarea></label>
+ <p class="ui" style="color:var(--mute)">Or upload a news audio clip (MP3, WAV, M4A, OGG, WEBM):</p><input type="file" name="file" accept="audio/*" aria-label="News audio"><button>Analyze</button> <button type="button" class="alt" id="ex">Load example</button><p id="st" class="ui" aria-live="polite"></p></form>`;
+ $('#ex').onclick=async()=>{$('textarea').value=(await api('/sample')).text};
+ $('#f').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);if(!fd.get('file').size)fd.delete('file');$('#st').textContent='Analyzing…';
+  try{S.cur=await api('/analyze',{method:'POST',body:fd});S.tab='Summary';render()}catch(x){$('#st').textContent='';toast(x.message,1)}}}
+function result(m){const r=S.cur,a=r.analysis,s=a.sentiment,T=['Summary','Topics & keywords','Sentiment','Text'];
+ m.innerHTML=`<p class="ui"><a href="#" id="bk">← Back</a></p><h2>${esc(r.title)} ${r.source=='demo'?'<span class="badge">demo transcript (no speech engine installed)</span>':''}</h2>
+ <div class="grid"><div class="card stat"><b>${esc(a.topics[0].topic)}</b><span class="ui">Main topic</span></div><div class="card stat"><b class="${cls(s.label)}">${s.label}</b><span class="ui">Sentiment (${s.score})</span></div><div class="card stat"><b>${a.read_minutes} min</b><span class="ui">${a.words} words</span></div></div>
+ <div class="tabs">${T.map(t=>`<button class="${S.tab==t?'on':''}" data-t="${t}">${t}</button>`).join('')}</div><div id="tb"></div>`;
+ $('#bk').onclick=e=>{e.preventDefault();S.cur=null;render()};m.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;result(m)});
+ const n=Math.max(s.positive_sentences+s.negative_sentences+s.neutral_sentences,1),w=v=>v*100/n;
+ $('#tb').innerHTML={Summary:()=>`<div class="card"><h3>Short summary</h3><p>${esc(a.summary_short)}</p><h3>Detailed summary</h3><p>${esc(a.summary_long)}</p></div><div class="card"><h3>Key facts</h3>${a.facts.length?`<ul>${a.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>`:'<p class="empty">No figures or dates found.</p>'}</div>`,
+ 'Topics & keywords':()=>`<div class="card"><h3>Topics</h3>${a.topics.map(t=>bar(t.topic,t.share)).join('')}</div><div class="card"><h3>Keywords</h3>${a.keywords.map(k=>`<span class="tag">${esc(k)}</span>`).join('')}</div><div class="card"><h3>People, places and organizations</h3>${a.entities.length?a.entities.map(e=>`<span class="tag">${esc(e.name)}${e.count>1?' ×'+e.count:''}</span>`).join(''):'<p class="empty">None detected.</p>'}</div>`,
+ Sentiment:()=>`<div class="card"><h3 class="${cls(s.label)}">${s.label} (${s.score})</h3><div class="stk" role="img" aria-label="Sentence sentiment split"><i style="width:${w(s.positive_sentences)}%;background:var(--pos)"></i><i style="width:${w(s.neutral_sentences)}%;background:#c8ccd2"></i><i style="width:${w(s.negative_sentences)}%;background:var(--neg)"></i></div><p class="ui">${s.positive_sentences} positive · ${s.neutral_sentences} neutral · ${s.negative_sentences} negative sentences</p></div>
+  <div class="grid"><div class="card"><h3>Tone</h3><p>${a.subjectivity.label} (${a.subjectivity.score}/100)</p><p class="ui" style="color:var(--mute)">Counts opinion words, exclamations and first-person language.</p></div><div class="card"><h3>Readability</h3><p>${a.readability.level} (${a.readability.score}/100)</p></div></div>`,
+ Text:()=>`<div class="card"><p style="white-space:pre-wrap">${esc(r.text)}</p></div>`}[S.tab]()}
+async function dash(m){let d;try{d=await api('/articles')}catch{return}
+ if(!d.items.length)return m.innerHTML='<div class="card empty"><h2>No stories analyzed yet</h2>Analyze an article to build your dashboard.</div>';
+ const n=d.items.length,tp=Object.entries(d.topics).sort((a,b)=>b[1]-a[1]);
+ m.innerHTML=`<h2>Dashboard</h2><div class="grid"><div class="card"><h3>Topics</h3>${tp.map(([k,v])=>bar(k,Math.round(v*100/n))).join('')}</div><div class="card"><h3>Sentiment</h3>${Object.entries(d.sentiment).map(([k,v])=>`<div class="ui ${cls(k)}">${k} · <b>${v}</b></div><div class="bar"><i style="width:${v*100/n}%;background:var(--${k=='Positive'?'pos':k=='Negative'?'neg':'neu'})"></i></div>`).join('')}</div></div>
+ <div class="card"><table><tr><th>Story</th><th>Topic</th><th>Sentiment</th><th></th></tr>${d.items.map(i=>`<tr><td><a href="#" data-id="${i.id}">${esc(i.title)}</a> ${i.source=='demo'?'<span class="badge">demo</span>':''}</td><td>${esc(i.topic)}</td><td class="${cls(i.sentiment)}">${i.sentiment}</td><td><button class="del" data-del="${i.id}">Delete</button></td></tr>`).join('')}</table></div>`;
+ m.querySelectorAll('[data-id]').forEach(a=>a.onclick=async e=>{e.preventDefault();S.cur=await api('/articles/'+a.dataset.id);S.tab='Summary';render()});
+ m.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(confirm('Delete this story?')){await api('/articles/'+b.dataset.del,{method:'DELETE'});toast('Story deleted.');render()}})}
+render();
+</script></body></html>
